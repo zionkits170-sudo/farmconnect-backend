@@ -1,0 +1,33 @@
+// M26B13/019 KITUNZI ZION MUKISA - Feature 2: Reviews & Ratings (No Duplicates)
+const express = require('express');
+const router = express.Router();
+const db = require('../config/db');
+const auth = require('../middleware/auth');
+
+// GET /api/products/:id/reviews
+router.get('/product/:productId', async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT r.*, u.name FROM reviews r JOIN users u ON r.user_id = u.id WHERE product_id = ? ORDER BY created_at DESC`,
+      [req.params.productId]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ message: 'Server error' }); }
+});
+
+// POST /api/reviews
+router.post('/', auth, async (req, res) => {
+  const { product_id, rating, comment } = req.body;
+  if (!product_id || !rating) return res.status(400).json({ message: 'product_id and rating required' });
+  if (rating <1 || rating >5) return res.status(400).json({ message: 'Rating must be 1-5' });
+  try {
+    await db.query('INSERT INTO reviews (product_id, user_id, rating, comment) VALUES (?, ?, ?, ?)', 
+      [product_id, req.user.id, rating, comment]);
+    res.status(201).json({ message: 'Review added' });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') return res.status(400).json({ message: 'You already reviewed this product' });
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+module.exports = router;
